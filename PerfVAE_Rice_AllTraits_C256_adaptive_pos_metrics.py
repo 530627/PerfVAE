@@ -3,13 +3,13 @@
 
 Expected files (script beside data/):
   data/maf_0.05_ld_filtered_genotypes.txt
-  data/rice299_GL.csv
-  data/rice299_GW.csv
-  data/rice299_LA.csv
+  data/rice299_LDG.csv
+  data/rice299_FL.csv
+  data/rice299_MAT.csv
   data/rice299_PH.csv
-  data/rice299_PnN.csv
+  data/rice299_TILLER.csv
   data/rice299_YLD.csv
-  data/rice299_YPP.csv
+  data/rice299_Kg_ha.csv
 
 The genotype file is retained from the uploaded Rice LD-filtered script.
 Phenotypes are joined to genotype samples by sample ID, not row position.
@@ -63,7 +63,7 @@ DATA_DIR_DEFAULT = SCRIPT_DIR / "data"
 CONFIG = {
     # New LD-filtered Rice genotype (actual sample count is checked at runtime).
     # Two phenotypes from the early Rice data processing convention.
-    "traits": ["GL", "GW", "LA", "PH", "PnN", "YLD", "YPP"],
+    "traits": ["LDG", "FL", "MAT", "PH", "TILLER", "YLD", "Kg_ha"],
     "data_dir": str(DATA_DIR_DEFAULT),
 
     # Run ONLY the combined ASCM configuration (adaptive weights + learnable
@@ -102,7 +102,7 @@ CONFIG = {
     "no_plot": False,
     "allow_phenotype_row_order": False,  # Intentionally disabled: strict sample-ID join only.
     "minus_one_mode": "missing",      # OLD PerfVAE.py: X_raw[X_raw == -1] = np.nan
-    "phenotype_column_overrides": {"GL": None, "GW": None, "LA": None, "PH": None, "PnN": None, "YLD": None, "YPP": None},
+    "phenotype_column_overrides": {"LDG": None, "FL": None, "MAT": None, "PH": None, "TILLER": None, "YLD": None, "Kg_ha": None},
     "check_data_only": False,      # True: check new Rice data without training.
     "verbose_data": False,        # True: print file headers and ID alignment diagnostics.
 }
@@ -358,13 +358,13 @@ class EnhancedGeneticModel(nn.Module):
 # Sample ID must be present as the FIRST column (early PerfVAE.py assumption).
 # Do not use positional extraction on the joined dataframe: it can omit SNP columns.
 RICE_TRAITS = {
-    "GL": "rice299_GL.csv",
-    "GW": "rice299_GW.csv",
-    "LA": "rice299_LA.csv",
+    "LDG": "rice299_LDG.csv",
+    "FL": "rice299_FL.csv",
+    "MAT": "rice299_MAT.csv",
     "PH": "rice299_PH.csv",
-    "PnN": "rice299_PnN.csv",
+    "TILLER": "rice299_TILLER.csv",
     "YLD": "rice299_YLD.csv",
-    "YPP": "rice299_YPP.csv",
+    "Kg_ha": "rice299_Kg_ha.csv",
 }
 RICE_GENO_FILE = "maf_0.05_ld_filtered_genotypes.txt"
 RICE_ID_ALIASES = {"entry", "id", "iid", "sample", "sampleid", "accession", "line",

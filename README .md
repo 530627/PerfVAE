@@ -326,8 +326,6 @@ python -u perfVAE_maize80k.py \
 
 Preparation defaults are **MAF ≥ 0.05**, SNP/sample missingness **≤ 0.20**, and LD pruning with a **50 kb** window, **5-SNP** step, and **r² threshold 0.8**, followed by deterministic physical-position sampling to 80,000 SNPs. This is a separate selection workflow from the variant-index subsampling in `PerfVAE.py`.
 
-**Required model source:** the current `perfVAE_maize80k.py` imports `EnhancedGeneticModel` and `GeneticAwareLoss` from **`perfVAE0530.py`** and reads that file to record its hash. Supply the original compatible `perfVAE0530.py` beside it before running. The listed `PerfVAE.py` does not satisfy this filename dependency, and its loss interface differs; renaming it alone is insufficient.
-
 Training runs a separate **10-fold CV** for each trait. Within each outer training fold, **85%/15%** is split for training/validation. Defaults are at most **150 epochs**, early-stopping patience **50**, and evaluation of the model with the lowest validation loss. Settings are supplied through CLI options. Outputs include `experiment_config.json` and per-trait `fold_results.csv`, `summary.json`, and `fold_<k>_predictions.csv`.
 
 ### Wheat2000: effect recovery and post-hoc hard negatives
@@ -340,7 +338,7 @@ Edit `CONFIG`, then run:
 python -u PerfVAE_Wheat2000__Additive_Epistatic_EffectRecovery.py
 ```
 
-The script defines a 10-fold split but runs **only folds 1 and 2 by default** (`folds_to_run=[1,2]`). For all ten folds, set `folds_to_run` to `list(range(1,11))`. Keep `save_checkpoints=True` for the subsequent post-hoc analysis. Results default to `Wheat2000_FullPerfVAE_Additive_Epistatic_EffectRecovery_128D/`, including fold summaries, simulated phenotypes, SNP manifests, effect tables, and saved models.
+The script defines a 10-fold split but runs. For all ten folds, set `folds_to_run` to `list(range(1,11))`. Keep `save_checkpoints=True` for the subsequent post-hoc analysis. Results default to `Wheat2000_FullPerfVAE_Additive_Epistatic_EffectRecovery_128D/`, including fold summaries, simulated phenotypes, SNP manifests, effect tables, and saved models.
 
 `PerfVAE_Wheat2000_Epistatic_HardNeg_PostHoc.py` loads those saved epistatic models without retraining. Before running, update its `CONFIG["original_script"]` to the actual uploaded effect-recovery filename:
 

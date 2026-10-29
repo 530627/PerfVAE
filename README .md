@@ -2,15 +2,22 @@
 
 PyTorch implementation of a variational model for phenotype prediction from SNP genotypes, with optional sample-dependent chunk weighting and learnable chunk positional embeddings.
 
-The training and evaluation workflow is implemented in [`PerfVAE.py`](PerfVAE.py). Experiment settings are controlled by the `CONFIG` dictionary near the top of that file.
+The main training and evaluation workflow is implemented in [`PerfVAE.py`](PerfVAE.py). Experiment settings are controlled by the `CONFIG` dictionary near the top of that file.
 
 By default, the script runs **Wheat2000 / `tkw`**, compares **four model variants** at chunk size **256**, and performs **10-fold cross-validation with 150 training epochs per fold**. This produces 40 fold-level training runs. Each run is evaluated using its final-epoch model.
+
+Unless stated otherwise, the model, configuration, preprocessing, and output descriptions below refer to `PerfVAE.py`. The five additional scripts have separate workflows, described under [Additional scripts](#additional-scripts).
 
 ## Repository layout
 
 | Path | Purpose |
 | --- | --- |
 | `PerfVAE.py` | Model definitions, dataset readers, preprocessing, training, evaluation, and result export |
+| `PerfVAE_Rice_AllTraits_C256_adaptive_pos_metrics.py` | Rice seven-trait prediction with the LD-filtered genotype input, `adaptive_pos`, and additional prediction metrics |
+| `prepare_maize80k.py` | Maize PLINK quality control, LD pruning, and physical-position selection of 80,000 SNPs |
+| `perfVAE_maize80k.py` | Trait-wise maize prediction on the prepared 80,000-SNP panel; requires `perfVAE0530.py` |
+| `PerfVAE_Wheat2000__Additive_Epistatic_EffectRecovery.py` | Controlled additive/epistatic phenotype simulation and effect-recovery experiments on Wheat2000 genotypes |
+| `PerfVAE_Wheat2000_Epistatic_HardNeg_PostHoc.py` | Post-hoc interaction specificity analysis using saved effect-recovery models and hard negative controls |
 | `data/` | Local input directory, located beside the script by default |
 | `ASCM_results_Fixed150_NoEarlyStop/` | Default output directory, generated during execution |
 
@@ -60,7 +67,7 @@ $$
 with
 
 $$
-\mathcal{L}_{\mathrm{KL}} =+-\frac{1}{2B}\sum_{b=1}^{B}\sum_{j=1}^{L}
+\mathcal{L}_{\mathrm{KL}} =-\frac{1}{2B}\sum_{b=1}^{B}\sum_{j=1}^{L}
 \left(1+\log\sigma_{bj}^{2}-\mu_{bj}^{2}-\sigma_{bj}^{2}\right).
 $$
 
@@ -87,6 +94,8 @@ For Maize1404 PLINK input:
 ```bash
 pip install pandas-plink
 ```
+
+The additional Rice and maize training scripts also require SciPy (`pip install scipy`). `prepare_maize80k.py` requires Python 3.9+ and the external **PLINK 1.9** executable, available as `plink` on `PATH` or supplied through `--plink`.
 
 For the default CUDA configuration, the PyTorch installation must support the available GPU. Package versions are not pinned in the script. If Matplotlib is unavailable, the plotting functions skip figures and retain CSV outputs.
 
@@ -119,6 +128,8 @@ The table below lists the filenames and trait keys implemented in this version o
 Each phenotype row supplies a numeric value in its first whitespace-separated field. Nonnumeric header lines are skipped; blank rows raise an error. Genotype and phenotype rows must already be in matching sample order, and their sample counts must agree. This reader does not match sample IDs.
 
 ### Rice
+
+This subsection describes the Rice reader in `PerfVAE.py`. For the new LD-filtered Rice data and seven-trait experiment, use `PerfVAE_Rice_AllTraits_C256_adaptive_pos_metrics.py` as described under [Additional scripts](#additional-scripts).
 
 The genotype and phenotype tables must both contain a unique `Entry` column. Each phenotype file must also contain its corresponding trait column. Samples are inner-joined by `Entry`, and rows with missing or nonnumeric values for the selected phenotype are removed.
 
@@ -276,3 +287,71 @@ SNP ranges refer to input column positions, rather than chromosome/base-pair coo
 With `resume=True`, the script checks the existing fold CSV's configuration signature and skips completed `(variant, chunk size, fold)` entries. A signature mismatch raises an error.
 
 An interrupted fold restarts from the beginning. Optional checkpoint files contain model weights only; the script does not save optimizer/scheduler states, fitted preprocessors, or per-sample predictions, and does not implement checkpoint-based inference or epoch-level training recovery.
+
+## Additional scripts
+
+Run these scripts from the repository root. Their settings and output directories are independent of `PerfVAE.py`; in particular, the main script's loss coefficients, final-epoch evaluation, and resume behavior do not apply to every script below.
+
+### Rice: seven-trait prediction
+
+`PerfVAE_Rice_AllTraits_C256_adaptive_pos_metrics.py` reads `maf_0.05_ld_filtered_genotypes.txt` and phenotype files named `rice299_{trait}.csv` for **TILLER, FL, LDG, PH, MAT, YLD, and Kg_ha** under `data/`. Both genotype and phenotype tables must have unique sample IDs in the **first column**. Samples are joined by ID, rather than row order; `-1` genotype values are treated as missing by default.
+
+The default experiment uses only `adaptive_pos` at **C=256**, with **10 folds and 150 epochs per fold**, and evaluates the final-epoch model. Its defaults differ from the main script: batch size **48**, `lr=max_lr=1e-4`, weight decay **0**, and prediction/reconstruction/KL weights **1.5/1.0/0.8**. Edit its own `CONFIG` for experiment settings.
+
+```bash
+python -u PerfVAE_Rice_AllTraits_C256_adaptive_pos_metrics.py --check-data-only
+python -u PerfVAE_Rice_AllTraits_C256_adaptive_pos_metrics.py
+```
+
+Optional CLI overrides are `--data-dir`, `--out-dir`, and `--device`. Results default to `ASCM_results_Rice_AllTraits_C256_adaptive_pos_FIXED150/`, including per-trait `fold_results.csv`, `summary.csv`, `oof_predictions.csv`, `oof_metrics.csv`, and `split_manifest.csv`. Additional metrics include RMSE, MAE, bias, Spearman correlation, and selection accuracy; prediction metrics use the original phenotype scale.
+
+### Maize: QC/LD/physical-position 80,000-SNP workflow
+
+First prepare the PLINK input, then train on the exported panel:
+
+```bash
+python prepare_maize80k.py \
+  --bfile data/cubic_1404_hmp2plink_maf0.02 \
+  --out-dir data/maize80k_qc_ld \
+  --plink plink
+
+python -u perfVAE_maize80k.py \
+  --bfile data/maize80k_qc_ld/maize80k_qc_ld_physical \
+  --trait-file data/trait.txt \
+  --out-dir Maize80k_results \
+  --traits PH KNPE KWPE DTA
+```
+
+`--bfile` is a prefix without `.bed`, `.bim`, or `.fam`; all three files must exist. The phenotype table must contain unique sample IDs matching PLINK IIDs and the requested trait columns.
+
+Preparation defaults are **MAF ≥ 0.05**, SNP/sample missingness **≤ 0.20**, and LD pruning with a **50 kb** window, **5-SNP** step, and **r² threshold 0.8**, followed by deterministic physical-position sampling to 80,000 SNPs. This is a separate selection workflow from the variant-index subsampling in `PerfVAE.py`.
+
+**Required model source:** the current `perfVAE_maize80k.py` imports `EnhancedGeneticModel` and `GeneticAwareLoss` from **`perfVAE0530.py`** and reads that file to record its hash. Supply the original compatible `perfVAE0530.py` beside it before running. The listed `PerfVAE.py` does not satisfy this filename dependency, and its loss interface differs; renaming it alone is insufficient.
+
+Training runs a separate **10-fold CV** for each trait. Within each outer training fold, **85%/15%** is split for training/validation. Defaults are at most **150 epochs**, early-stopping patience **50**, and evaluation of the model with the lowest validation loss. Settings are supplied through CLI options. Outputs include `experiment_config.json` and per-trait `fold_results.csv`, `summary.json`, and `fold_<k>_predictions.csv`.
+
+### Wheat2000: effect recovery and post-hoc hard negatives
+
+`PerfVAE_Wheat2000__Additive_Epistatic_EffectRecovery.py` uses `data/2000gene.pkl` to simulate phenotypes with known additive and epistatic effects, then compares held-out model perturbation estimates with that simulated truth. Observed phenotype files are not required. The default uses the original model configuration with latent dimension **128**, **1,024 selected SNPs**, and the **additive** and **epistatic** scenarios.
+
+Edit `CONFIG`, then run:
+
+```bash
+python -u PerfVAE_Wheat2000__Additive_Epistatic_EffectRecovery.py
+```
+
+The script defines a 10-fold split but runs **only folds 1 and 2 by default** (`folds_to_run=[1,2]`). For all ten folds, set `folds_to_run` to `list(range(1,11))`. Keep `save_checkpoints=True` for the subsequent post-hoc analysis. Results default to `Wheat2000_FullPerfVAE_Additive_Epistatic_EffectRecovery_128D/`, including fold summaries, simulated phenotypes, SNP manifests, effect tables, and saved models.
+
+`PerfVAE_Wheat2000_Epistatic_HardNeg_PostHoc.py` loads those saved epistatic models without retraining. Before running, update its `CONFIG["original_script"]` to the actual uploaded effect-recovery filename:
+
+```python
+"original_script": str(SCRIPT_DIR / "PerfVAE_Wheat2000__Additive_Epistatic_EffectRecovery.py"),
+```
+
+Its default still points to the older name `PerfVAE_Wheat2000_Full128D_Additive_Epistatic_EffectRecovery_GPU.py`. Also match `original_results_dir`, `data_dir`, and `folds_to_run` to the completed source experiment: use `[1,2]` if only the default pilot folds exist, or complete all ten source folds before using the post-hoc default of ten folds.
+
+```bash
+python -u PerfVAE_Wheat2000_Epistatic_HardNeg_PostHoc.py
+```
+
+Keep the source results directory intact, including checkpoints, provenance, SNP manifests, simulated phenotypes, fold assignments, and interaction-effect tables. Post-hoc outputs default to `Wheat2000_Epistatic_HardNegative_PostHoc_128D/`, including `fold_metrics.csv`, `summary_mean_sd.csv`, and `all_pairs_foldwise.csv`.

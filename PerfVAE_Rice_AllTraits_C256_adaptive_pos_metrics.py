@@ -322,8 +322,8 @@ class EnhancedGeneticModel(nn.Module):
         )
         # EXACT layer widths and GELU placements from perfVAE0530.py.
         self.linear_shortcut = nn.Sequential(
-            nn.Linear(snp_dim, 4086), nn.BatchNorm1d(4086), nn.GELU(),
-            nn.Linear(4086, 1024), nn.BatchNorm1d(1024), nn.GELU(),
+            nn.Linear(snp_dim, 4096), nn.BatchNorm1d(4096), nn.GELU(),
+            nn.Linear(4096, 1024), nn.BatchNorm1d(1024), nn.GELU(),
             nn.Linear(1024, 256), nn.BatchNorm1d(256), nn.GELU(),
             nn.Dropout(dropout), nn.Linear(256, 64)
         )
